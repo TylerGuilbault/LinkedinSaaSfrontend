@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>LinkedIn SaaS – Test</title>
+  <style>
+    body{font-family:system-ui,Arial;margin:0;display:grid;place-items:center;min-height:100vh;background:#0b0f14;color:#e6edf3}
+    .card{background:#111826;border:1px solid #1f2937;border-radius:16px;padding:24px;max-width:680px;width:100%;box-shadow:0 8px 30px rgba(0,0,0,.25)}
+    button{padding:12px 16px;border-radius:10px;border:0;cursor:pointer}
+    .primary{background:#3b82f6;color:white}
+    .row{display:flex;flex-wrap:wrap;gap:10px;margin-top:14px}
+    textarea,input{width:100%;border-radius:10px;border:1px solid #1f2937;background:#0b1220;color:#e6edf3;padding:10px}
+    textarea{height:140px;margin-top:8px}
+    label{display:block;margin-top:14px}
+    #out{white-space:pre-wrap;background:#0b1220;border-radius:10px;padding:10px;margin-top:12px;border:1px solid #1f2937}
+    small{opacity:.7}
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>LinkedIn SaaS – Test</h1>
+    <small>API: <code id="apiLabel">https://linkedsaas.onrender.com</code></small>
+
+    <div class="row">
+      <button class="primary" id="login">Sign in with LinkedIn</button>
+      <button id="genDraft">Generate Draft</button>
+      <button id="publish">Publish Link (user_id=6)</button>
+    </div>
+
+    <label>Article URL</label>
+    <input id="link" value="https://techcrunch.com/"/>
+
+    <label>Text</label>
+    <textarea id="text">Hello from the test site.</textarea>
+
+    <div id="out"></div>
+  </div>
+
+  <script>
+    const API = "https://linkedsaas.onrender.com";
+    const $ = id => document.getElementById(id);
+    const show = v => { $("out").textContent = typeof v === "string" ? v : JSON.stringify(v, null, 2); };
+
+    $("apiLabel").textContent = API;
+
+    $("login").onclick = () => {
+      // (Optional UX) After OAuth, the backend currently lands on an API page.
+      // That’s fine for now—we don’t need session cookies for these two calls.
+      window.location.href = `${API}/auth/linkedin/login`;
+    };
+
+    $("genDraft").onclick = async () => {
+      show("Generating draft…");
+      try {
+        const r = await fetch(`${API}/generate/post?draft=true`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ text: $("text").value.trim() })
+        });
+        const data = await r.text();
+        show(r.ok ? data : `Error ${r.status}: ${data}`);
+      } catch (e) { show(String(e)); }
+    };
+
+    $("publish").onclick = async () => {
+      show("Publishing…");
+      try {
+        const r = await fetch(`${API}/linkedin/post/link`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            user_id: 6,
+            url: $("link").value.trim(),
+            text: $("text").value.trim()
+          })
+        });
+        const data = await r.text();
+        show(r.ok ? data : `Error ${r.status}: ${data}`);
+      } catch (e) { show(String(e)); }
+    };
+  </script>
+</body>
+</html>
