@@ -3,15 +3,15 @@
 <head>
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
-  <title>LinkedIn SaaS – Test</title>
+  <title>LinkedIn SaaS – RSS Flow Test</title>
   <style>
     body{font-family:system-ui,Arial;margin:0;display:grid;place-items:center;min-height:100vh;background:#0b0f14;color:#e6edf3}
-    .card{background:#111826;border:1px solid #1f2937;border-radius:16px;padding:24px;max-width:680px;width:100%;box-shadow:0 8px 30px rgba(0,0,0,.25)}
+    .card{background:#111826;border:1px solid #1f2937;border-radius:16px;padding:24px;max-width:820px;width:100%;box-shadow:0 8px 30px rgba(0,0,0,.25)}
     button{padding:12px 16px;border-radius:10px;border:0;cursor:pointer}
     .primary{background:#3b82f6;color:white}
     .row{display:flex;flex-wrap:wrap;gap:10px;margin-top:14px}
-    textarea,input{width:100%;border-radius:10px;border:1px solid #1f2937;background:#0b1220;color:#e6edf3;padding:10px}
-    textarea{height:140px;margin-top:8px}
+    textarea,input,select{width:100%;border-radius:10px;border:1px solid #1f2937;background:#0b1220;color:#e6edf3;padding:10px}
+    textarea{height:160px;margin-top:8px}
     label{display:block;margin-top:14px}
     #out{white-space:pre-wrap;background:#0b1220;border-radius:10px;padding:10px;margin-top:12px;border:1px solid #1f2937}
     small{opacity:.7}
@@ -19,77 +19,167 @@
 </head>
 <body>
   <div class="card">
-    <h1>LinkedIn SaaS – Test</h1>
+    <h1>LinkedIn SaaS – RSS → Draft → Publish</h1>
     <small>API: <code id="apiLabel">https://linkedsaas.onrender.com</code></small>
 
     <div class="row">
       <button class="primary" id="login">Sign in with LinkedIn</button>
-      <button id="genDraft">Generate Draft</button>
-      <button id="publish">Publish Link (user_id=6)</button>
+      <button id="fetchRss">Fetch RSS</button>
+      <button id="draftFromRss">Draft from RSS</button>
+      <button id="publish">Publish (user_id=6)</button>
     </div>
 
-    <label>Article URL</label>
-    <input id="link" value="https://techcrunch.com/"/>
+    <label>RSS URL</label>
+    <input id="rssUrl" value="https://techcrunch.com/feed/"/>
 
-    <label>Text</label>
-    <textarea id="text">Hello from the test site.</textarea>
+    <label>Choose an article</label>
+    <select id="rssList"><option value="">(fetch to load items)</option></select>
+
+    <label>Article URL</label>
+    <input id="link" value=""/>
+
+    <label>Text (will be auto-filled by Draft)</label>
+    <textarea id="text">Type here or generate from RSS…</textarea>
+
+    <div class="row">
+      <div>
+        <label>Tone</label>
+        <select id="tone">
+          <option>professional</option>
+          <option>conversational</option>
+          <option>motivational</option>
+          <option>insightful</option>
+        </select>
+      </div>
+      <div>
+        <label>Angle</label>
+        <select id="angle">
+          <option>leadership</option>
+          <option>strategy</option>
+          <option>product</option>
+          <option>marketing</option>
+        </select>
+      </div>
+      <div>
+        <label>Max words</label>
+        <input id="maxWords" type="number" value="280"/>
+      </div>
+    </div>
 
     <div id="out"></div>
   </div>
 
   <script>
-  const API = "https://linkedsaas.onrender.com";
-  const $ = id => document.getElementById(id);
-  const show = v => { $("out").textContent = typeof v === "string" ? v : JSON.stringify(v, null, 2); };
+    const API = "https://linkedsaas.onrender.com";
+    const $ = id => document.getElementById(id);
+    const show = v => { $("out").textContent = typeof v === "string" ? v : JSON.stringify(v, null, 2); };
 
-  $("login").onclick = () => { window.location.href = `${API}/auth/linkedin/login`; };
+    $("apiLabel").textContent = API;
 
-  $("genDraft").onclick = async () => {
-    $("genDraft").disabled = true;
-    show("Generating draft…");
-    try {
-      const r = await fetch(`${API}/generate/post?draft=true`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text: $("text").value.trim() })
-      });
-      const raw = await r.text();
-      // Try to parse JSON and pull the "post" field; fallback to raw text
-      let draft = raw;
-      try { const j = JSON.parse(raw); if (j && j.post) draft = j.post; } catch {}
-      if (!r.ok) return show(`Error ${r.status}: ${raw}`);
-      $("text").value = draft;         // <- auto-fill textarea with the draft
-      show({ draft });
-    } catch (e) {
-      show(String(e));
-    } finally {
-      $("genDraft").disabled = false;
-    }
-  };
+    $("login").onclick = () => { window.location.href = `${API}/auth/linkedin/login`; };
 
-  $("publish").onclick = async () => {
-    $("publish").disabled = true;
-    show("Publishing…");
-    try {
-      const r = await fetch(`${API}/linkedin/post/link`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          user_id: 6,
-          url: $("link").value.trim(),
-          text: $("text").value.trim()
-        })
-      });
-      const raw = await r.text();
-      if (!r.ok) return show(`Error ${r.status}: ${raw}`);
-      show(raw); // should include {"status":"posted","id":"urn:li:share:..."}
-    } catch (e) {
-      show(String(e));
-    } finally {
-      $("publish").disabled = false;
-    }
-  };
-</script>
+    // 1) Fetch RSS items
+    $("fetchRss").onclick = async () => {
+      const url = $("rssUrl").value.trim();
+      if (!url) return show("Please enter an RSS URL.");
+      show("Fetching RSS…");
+      $("fetchRss").disabled = true;
+      try {
+        const q = new URLSearchParams({ url, limit: "8" }).toString();
+        const r = await fetch(`${API}/rss/test?${q}`);
+        const data = await r.json();
+        if (!r.ok) return show(data);
+        const items = data.items || [];
+        $("rssList").innerHTML = items.map((it, i) => {
+          // try to pick a usable link field
+          const link = it.link || it.url || (it.links && it.links[0] && it.links[0].href) || "";
+          const title = (it.title || link || `Item ${i+1}`).toString().slice(0,140);
+          return `<option value="${i}">${title}</option>`;
+        }).join("") || `<option value="">(no items)</option>`;
+        // prefill the link box with first item
+        if (items.length) {
+          const first = items[0];
+          const link = first.link || first.url || (first.links && first.links[0] && first.links[0].href) || "";
+          $("link").value = link || "";
+          // stash items for later use
+          window._rssItems = items;
+        }
+        show({count: items.length});
+      } catch (e) {
+        show(String(e));
+      } finally {
+        $("fetchRss").disabled = false;
+      }
+    };
 
+    // 2) Draft from selected RSS item using /generate/thoughtpost
+    $("draftFromRss").onclick = async () => {
+      const items = window._rssItems || [];
+      if (!items.length) return show("Fetch RSS first.");
+      const idx = parseInt($("rssList").value || "0", 10) || 0;
+      const chosen = items[idx] || items[0];
+      // extract best-available fields
+      const source_link =
+        chosen.link || chosen.url || (chosen.links && chosen.links[0] && chosen.links[0].href) || $("link").value.trim();
+      const source_title = (chosen.title || "").toString();
+      const summary = (chosen.summary || chosen.description || source_title || "").toString();
+
+      if (!source_link) return show("Couldn't resolve article URL from the feed.");
+
+      const body = {
+        text: summary,                       // seed text for your AI rewrite
+        tone: $("tone").value || "professional",
+        angle: $("angle").value || "leadership",
+        source_title,
+        source_link,
+        max_words: parseInt($("maxWords").value || "280", 10) || 280
+      };
+
+      show("Generating draft from RSS…");
+      $("draftFromRss").disabled = true;
+      try {
+        const r = await fetch(`${API}/generate/thoughtpost`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body)
+        });
+        const raw = await r.text();
+        if (!r.ok) return show(`Error ${r.status}: ${raw}`);
+        let draft = raw;
+        try { const j = JSON.parse(raw); if (j && j.draft) draft = j.draft; } catch {}
+        $("text").value = draft;            // auto-fill textarea
+        $("link").value = source_link;      // ensure publish uses the same article
+        show({ draft, source_link, source_title });
+      } catch (e) {
+        show(String(e));
+      } finally {
+        $("draftFromRss").disabled = false;
+      }
+    };
+
+    // 3) Publish to LinkedIn with link preview (user_id=6)
+    $("publish").onclick = async () => {
+      show("Publishing…");
+      $("publish").disabled = true;
+      try {
+        const r = await fetch(`${API}/linkedin/post/link`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            user_id: 6,
+            url: $("link").value.trim(),
+            text: $("text").value.trim()
+          })
+        });
+        const raw = await r.text();
+        if (!r.ok) return show(`Error ${r.status}: ${raw}`);
+        show(raw); // expected: {"status":"posted","id":"urn:li:share:..."}
+      } catch (e) {
+        show(String(e));
+      } finally {
+        $("publish").disabled = false;
+      }
+    };
+  </script>
 </body>
 </html>
