@@ -66,6 +66,14 @@
       </div>
     </div>
 
+    <!-- NEW: emoji toggle already present; we just wire it in JS below -->
+    <div class="row" style="align-items:center;gap:12px;margin-top:10px">
+      <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+        <input id="useEmojis" type="checkbox" />
+        <span>Use emojis (tastefully)</span>
+      </label>
+    </div>
+
     <div id="out"></div>
   </div>
 
@@ -126,9 +134,16 @@
 
       if (!source_link) return show("Couldn't resolve article URL from the feed.");
 
+      // 🔧 Wire in the emoji toggle here
+      const baseTone = $("tone").value || "professional";
+      const useEmojis = $("useEmojis")?.checked;
+      const toneForGen = useEmojis
+        ? `${baseTone} — include 1–2 relevant emojis if natural`
+        : baseTone;
+
       const body = {
         text: summary,                       // seed text for your AI rewrite
-        tone: $("tone").value || "professional",
+        tone: toneForGen,                    // ← toggle-aware tone
         angle: $("angle").value || "leadership",
         source_title,
         source_link,
