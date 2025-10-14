@@ -132,11 +132,12 @@
       const baseTone = $("tone").value || "professional"; // ← keep exact enum
       const body = {
         text: summary,
-        tone: baseTone,                                 // ← DO NOT augment
+        tone: baseTone,
         angle: $("angle").value || "leadership",
         source_title,
         source_link,
-        max_words: parseInt($("maxWords").value || "280", 10) || 280
+        max_words: parseInt($("maxWords").value || "280", 10) || 280,
+        use_emojis: $("useEmojis")?.checked || false
       };
 
       show("Generating draft from RSS…");
