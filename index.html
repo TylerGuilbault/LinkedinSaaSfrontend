@@ -66,7 +66,6 @@
       </div>
     </div>
 
-    <!-- NEW: emoji toggle already present; we just wire it in JS below -->
     <div class="row" style="align-items:center;gap:12px;margin-top:10px">
       <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
         <input id="useEmojis" type="checkbox" />
@@ -81,7 +80,6 @@
     const API = "https://linkedsaas.onrender.com";
     const $ = id => document.getElementById(id);
     const show = v => { $("out").textContent = typeof v === "string" ? v : JSON.stringify(v, null, 2); };
-
     $("apiLabel").textContent = API;
 
     $("login").onclick = () => { window.location.href = `${API}/auth/linkedin/login`; };
@@ -99,21 +97,19 @@
         if (!r.ok) return show(data);
         const items = data.items || [];
         $("rssList").innerHTML = items.map((it, i) => {
-          // try to pick a usable link field
           const link = it.link || it.url || (it.links && it.links[0] && it.links[0].href) || "";
           const title = (it.title || link || `Item ${i+1}`).toString().slice(0,140);
           return `<option value="${i}">${title}</option>`;
         }).join("") || `<option value="">(no items)</option>`;
-        // prefill the link box with first item
         if (items.length) {
           const first = items[0];
           const link = first.link || first.url || (first.links && first.links[0] && first.links[0].href) || "";
           $("link").value = link || "";
-          // stash items for later use
           window._rssItems = items;
         }
         show({count: items.length});
       } catch (e) {
+        console.error(e);
         show(String(e));
       } finally {
         $("fetchRss").disabled = false;
@@ -126,24 +122,17 @@
       if (!items.length) return show("Fetch RSS first.");
       const idx = parseInt($("rssList").value || "0", 10) || 0;
       const chosen = items[idx] || items[0];
-      // extract best-available fields
+
       const source_link =
         chosen.link || chosen.url || (chosen.links && chosen.links[0] && chosen.links[0].href) || $("link").value.trim();
       const source_title = (chosen.title || "").toString();
       const summary = (chosen.summary || chosen.description || source_title || "").toString();
-
       if (!source_link) return show("Couldn't resolve article URL from the feed.");
 
-      // 🔧 Wire in the emoji toggle here
-      const baseTone = $("tone").value || "professional";
-      const useEmojis = $("useEmojis")?.checked;
-      const toneForGen = useEmojis
-        ? `${baseTone} — include 1–2 relevant emojis if natural`
-        : baseTone;
-
+      const baseTone = $("tone").value || "professional"; // ← keep exact enum
       const body = {
-        text: summary,                       // seed text for your AI rewrite
-        tone: toneForGen,                    // ← toggle-aware tone
+        text: summary,
+        tone: baseTone,                                 // ← DO NOT augment
         angle: $("angle").value || "leadership",
         source_title,
         source_link,
@@ -159,13 +148,17 @@
           body: JSON.stringify(body)
         });
         const raw = await r.text();
-        if (!r.ok) return show(`Error ${r.status}: ${raw}`);
+        if (!r.ok) {
+          console.error("Draft error:", r.status, raw);
+          return show(`Error ${r.status}: ${raw}`);
+        }
         let draft = raw;
         try { const j = JSON.parse(raw); if (j && j.draft) draft = j.draft; } catch {}
-        $("text").value = draft;            // auto-fill textarea
-        $("link").value = source_link;      // ensure publish uses the same article
+        $("text").value = draft;
+        $("link").value = source_link;
         show({ draft, source_link, source_title });
       } catch (e) {
+        console.error(e);
         show(String(e));
       } finally {
         $("draftFromRss").disabled = false;
@@ -188,13 +181,18 @@
         });
         const raw = await r.text();
         if (!r.ok) return show(`Error ${r.status}: ${raw}`);
-        show(raw); // expected: {"status":"posted","id":"urn:li:share:..."}
+        show(raw);
       } catch (e) {
+        console.error(e);
         show(String(e));
       } finally {
         $("publish").disabled = false;
       }
     };
+  </script>
+</body>
+</html>
+
   </script>
 </body>
 </html>
