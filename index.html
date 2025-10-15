@@ -24,6 +24,10 @@
 
     <div class="row">
       <button class="primary" id="login">Sign in with LinkedIn</button>
+      <!-- NEW: logout + status (added, minimal UI change) -->
+      <button id="logout" style="display:none">Logout</button>
+      <span id="authStatus" style="align-self:center;opacity:.7"></span>
+      <!-- existing controls preserved -->
       <button id="fetchRss">Fetch RSS</button>
       <button id="draftFromRss">Draft from RSS</button>
       <button id="publish">Publish (user_id=6)</button>
@@ -82,7 +86,44 @@
     const show = v => { $("out").textContent = typeof v === "string" ? v : JSON.stringify(v, null, 2); };
     $("apiLabel").textContent = API;
 
-    $("login").onclick = () => { window.location.href = `${API}/auth/linkedin/login`; };
+    // --- NEW: session helpers (minimal) ---
+    async function checkSession() {
+      const statusEl = $("authStatus");
+      const loginBtn = $("login");
+      const logoutBtn = $("logout");
+      if (statusEl) statusEl.textContent = "Checking session…";
+      try {
+        const r = await fetch(`${API}/auth/linkedin/session/me`, { credentials: "include" });
+        const data = await r.json();
+        if (data.authenticated) {
+          if (statusEl) statusEl.textContent = `Signed in (user: ${data.user.id})`;
+          if (loginBtn) loginBtn.style.display = "none";
+          if (logoutBtn) logoutBtn.style.display = "inline-block";
+          window._sessionUserId = data.user.id; // prefer this for publish
+        } else {
+          if (statusEl) statusEl.textContent = "Not signed in.";
+          if (loginBtn) loginBtn.style.display = "inline-block";
+          if (logoutBtn) logoutBtn.style.display = "none";
+          window._sessionUserId = null;
+        }
+      } catch (e) {
+        console.error(e);
+        if (statusEl) statusEl.textContent = "Session check failed.";
+        window._sessionUserId = null;
+      }
+    }
+
+    if ($("login")) {
+      $("login").onclick = () => { window.location.href = `${API}/auth/linkedin/login`; };
+    }
+    if ($("logout")) {
+      $("logout").onclick = async () => {
+        try { await fetch(`${API}/auth/linkedin/logout`, { method: "POST", credentials: "include" }); } catch (e) {}
+        checkSession();
+      };
+    }
+    window.addEventListener("load", checkSession);
+    // --- END session helpers ---
 
     // 1) Fetch RSS items
     $("fetchRss").onclick = async () => {
@@ -166,19 +207,24 @@
       }
     };
 
-    // 3) Publish to LinkedIn with link preview (user_id=6)
+    // 3) Publish to LinkedIn with link preview
+    //    NEW: prefer session user (if logged in), else fallback to user_id=6 (unchanged behavior)
     $("publish").onclick = async () => {
       show("Publishing…");
       $("publish").disabled = true;
       try {
+        const payload = {
+          url: $("link").value.trim(),
+          text: $("text").value.trim()
+        };
+        if (!window._sessionUserId) {
+          payload.user_id = 6;  // fallback preserves your existing flow
+        }
         const r = await fetch(`${API}/linkedin/post/link`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            user_id: 6,
-            url: $("link").value.trim(),
-            text: $("text").value.trim()
-          })
+          credentials: "include", // include session cookie if present
+          body: JSON.stringify(payload)
         });
         const raw = await r.text();
         if (!r.ok) return show(`Error ${r.status}: ${raw}`);
@@ -190,10 +236,6 @@
         $("publish").disabled = false;
       }
     };
-  </script>
-</body>
-</html>
-
   </script>
 </body>
 </html>
