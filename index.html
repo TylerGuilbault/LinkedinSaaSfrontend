@@ -208,34 +208,35 @@
     };
 
     // 3) Publish to LinkedIn with link preview
-    //    NEW: prefer session user (if logged in), else fallback to user_id=6 (unchanged behavior)
-    $("publish").onclick = async () => {
-      show("Publishing…");
-      $("publish").disabled = true;
-      try {
-        const payload = {
-          url: $("link").value.trim(),
-          text: $("text").value.trim()
-        };
-        if (!window._sessionUserId) {
-          payload.user_id = 6;  // fallback preserves your existing flow
-        }
-        const r = await fetch(`${API}/linkedin/post/link`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          credentials: "include", // include session cookie if present
-          body: JSON.stringify(payload)
-        });
-        const raw = await r.text();
-        if (!r.ok) return show(`Error ${r.status}: ${raw}`);
-        show(raw);
-      } catch (e) {
-        console.error(e);
-        show(String(e));
-      } finally {
-        $("publish").disabled = false;
-      }
+$("publish").onclick = async () => {
+  show("Publishing…");
+  $("publish").disabled = true;
+  try {
+    const payload = {
+      url: $("link").value.trim(),
+      text: $("text").value.trim(),
+      // ALWAYS include a user_id to satisfy backend validation.
+      // Backend will ignore this when session is active.
+      user_id: window._sessionUserId ? Number(window._sessionUserId) : 6
     };
+
+    const r = await fetch(`${API}/linkedin/post/link`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include", // include session cookie if present
+      body: JSON.stringify(payload)
+    });
+
+    const raw = await r.text();
+    if (!r.ok) return show(`Error ${r.status}: ${raw}`);
+    show(raw);
+  } catch (e) {
+    console.error(e);
+    show(String(e));
+  } finally {
+    $("publish").disabled = false;
+  }
+};
   </script>
 </body>
 </html>
